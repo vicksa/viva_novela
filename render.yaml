@@ -5,7 +5,7 @@ services:
     rootDir: api
     plan: free
     buildCommand: npm install
-    startCommand: npm start
+    startCommand: node src/seed/seedIfEmpty.js && npm start
     envVars:
       - key: NODE_ENV
         value: production

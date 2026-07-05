@@ -122,4 +122,8 @@ async function seed() {
   }
 }
 
-seed();
+module.exports = seed;
+
+if (require.main === module) {
+  seed().then(() => process.exit(0));
+}
