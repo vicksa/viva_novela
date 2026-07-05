@@ -1,7 +1,7 @@
 const { z } = require('zod');
 
 const envSchema = z.object({
-  JWT_SECRET: z.string().min(1, 'JWT_SECRET é obrigatória').default('seu-segredo-super-seguro-aqui'),
+  JWT_SECRET: z.string().min(16, 'JWT_SECRET é obrigatória e deve ter pelo menos 16 caracteres'),
   PORT: z.coerce.number().default(3000),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   CORS_ORIGIN: z.string().default('http://localhost:8081,http://localhost:5173,http://localhost:5174'),

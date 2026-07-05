@@ -7,6 +7,8 @@ const router = express.Router();
 router.get('/usuarios', adminController.listarUsuarios);
 router.put('/usuarios/:id', adminController.editarUsuario);
 
+router.get('/historias', adminController.listarHistorias);
+router.get('/historias/:id/capitulos', adminController.listarCapitulosPorHistoria);
 router.post('/historias', adminController.criarHistoria);
 router.put('/historias/:id', adminController.editarHistoria);
 router.delete('/historias/:id', adminController.deletarHistoria);

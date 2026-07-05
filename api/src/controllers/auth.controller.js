@@ -32,7 +32,7 @@ const authController = {
 
       const token = jwt.sign(
         { id, email, plano: 'gratuito' },
-        process.env.JWT_SECRET || 'seu-segredo-super-seguro-aqui',
+        config.jwt.secret,
         { expiresIn: '7d' }
       );
 
@@ -69,7 +69,7 @@ const authController = {
 
       const token = jwt.sign(
         { id: usuario.id, email: usuario.email, plano: usuario.plano },
-        process.env.JWT_SECRET || 'seu-segredo-super-seguro-aqui',
+        config.jwt.secret,
         { expiresIn: '7d' }
       );
 

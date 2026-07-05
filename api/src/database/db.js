@@ -3,6 +3,19 @@ const { open } = require('sqlite');
 const path = require('path');
 
 let db;
+let filaExclusiva = Promise.resolve();
+
+/**
+ * A conexão SQLite é uma única e compartilhada por todas as requisições, então
+ * BEGIN/COMMIT concorrentes na mesma conexão colidem ("cannot start a transaction
+ * within a transaction"). runExclusive serializa blocos que precisam de transação
+ * (ex: leitura+débito de moedas), garantindo que um termine antes do próximo começar.
+ */
+function runExclusive(fn) {
+  const execucao = filaExclusiva.then(() => fn());
+  filaExclusiva = execucao.then(() => {}, () => {});
+  return execucao;
+}
 
 async function getDb() {
   if (db) return db;
@@ -11,6 +24,9 @@ async function getDb() {
     filename: path.join(__dirname, 'database.sqlite'),
     driver: sqlite3.Database
   });
+
+  // Evita erro "database is locked" sob concorrência: espera até 5s antes de falhar.
+  await db.run('PRAGMA busy_timeout = 5000');
 
   await initializeDatabase();
   
@@ -82,5 +98,6 @@ async function initializeDatabase() {
 }
 
 module.exports = {
-  getDb
+  getDb,
+  runExclusive
 };

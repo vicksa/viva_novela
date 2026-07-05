@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const { getDb } = require('../database/db');
+const config = require('../config');
 
 /**
  * Middleware obrigatório de autenticação.
@@ -16,10 +17,10 @@ const authRequired = async (req, res, next) => {
     const token = authHeader.split(' ')[1];
 
     try {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'seu-segredo-super-seguro-aqui');
+      const decoded = jwt.verify(token, config.jwt.secret);
       req.userId = decoded.id;
       req.userEmail = decoded.email;
-      
+
       const db = await getDb();
       const user = await db.get('SELECT papel FROM usuarios WHERE id = ?', [req.userId]);
       if (user) {
@@ -55,7 +56,7 @@ const authOptional = async (req, res, next) => {
     const token = authHeader.split(' ')[1];
 
     try {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'seu-segredo-super-seguro-aqui');
+      const decoded = jwt.verify(token, config.jwt.secret);
       req.userId = decoded.id;
       req.userEmail = decoded.email;
 

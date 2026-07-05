@@ -42,3 +42,7 @@ coverage/
 
 # Admin build
 admin/dist/
+
+# Database (contém hashes de senha e dados de usuários — nunca versionar)
+api/src/database/*.sqlite
+api/src/database/*.sqlite-journal

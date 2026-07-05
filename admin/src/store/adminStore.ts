@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { api } from '../api';
 
 export interface User {
-  id: number;
+  id: string;
   nome: string;
   email: string;
   papel: string;
@@ -11,17 +11,17 @@ export interface User {
 }
 
 export interface Historia {
-  id: number;
+  id: string;
   titulo: string;
-  autor_id: number;
+  autora: string;
   genero: string;
   sinopse: string;
   capa_url?: string;
 }
 
 export interface Capitulo {
-  id: number;
-  historia_id: number;
+  id: string;
+  historia_id: string;
   titulo: string;
   numero: number;
   conteudo: string;
@@ -30,7 +30,7 @@ export interface Capitulo {
 }
 
 export interface CreateCapituloData {
-  historia_id: number;
+  historia_id: string;
   titulo: string;
   numero: number;
   conteudo: string;
@@ -49,19 +49,23 @@ interface AdminState extends AuthState {
   usuarios: User[];
   historias: Historia[];
   capitulos: Capitulo[];
-  
+
   // Auth Actions
   login: (token: string, user: User) => void;
   logout: () => void;
   checkAuth: () => Promise<void>;
-  
+
   // Admin Actions
   fetchUsuarios: () => Promise<void>;
   fetchHistorias: () => Promise<void>;
-  updateUsuario: (id: number, data: Partial<User>) => Promise<void>;
+  updateUsuario: (id: string, data: Partial<User>) => Promise<void>;
   createHistoria: (data: Partial<Historia>) => Promise<void>;
-  fetchCapitulos: (historiaId: number) => Promise<void>;
+  updateHistoria: (id: string, data: Partial<Historia>) => Promise<void>;
+  deleteHistoria: (id: string) => Promise<void>;
+  fetchCapitulos: (historiaId: string) => Promise<void>;
   createCapitulo: (data: CreateCapituloData) => Promise<void>;
+  updateCapitulo: (id: string, historiaId: string, data: Partial<CreateCapituloData>) => Promise<void>;
+  deleteCapitulo: (id: string) => Promise<void>;
 }
 
 export const useAdminStore = create<AdminState>((set, get) => ({
@@ -89,10 +93,10 @@ export const useAdminStore = create<AdminState>((set, get) => ({
       set({ isLoading: false });
       return;
     }
-    
+
     try {
-      // Assuming there is a /auth/me or similar, if not we'll handle the logic in login
-      // For this step, if we have a token we assume logged in until a request fails with 401
+      // Valida de verdade se o token ainda é aceito pela API antes de liberar a tela.
+      await api.get('/perfil');
       set({ isLoading: false });
     } catch (error) {
       logout();
@@ -102,8 +106,8 @@ export const useAdminStore = create<AdminState>((set, get) => ({
 
   fetchUsuarios: async () => {
     try {
-      const usuarios = await api.get<User[]>('/admin/usuarios');
-      set({ usuarios });
+      const response = await api.get<{ data: User[] }>('/admin/usuarios');
+      set({ usuarios: response.data });
     } catch (error) {
       console.error('Error fetching users:', error);
     }
@@ -111,8 +115,8 @@ export const useAdminStore = create<AdminState>((set, get) => ({
 
   fetchHistorias: async () => {
     try {
-      const historias = await api.get<Historia[]>('/admin/historias');
-      set({ historias });
+      const response = await api.get<{ data: Historia[] }>('/admin/historias');
+      set({ historias: response.data });
     } catch (error) {
       console.error('Error fetching stories:', error);
     }
@@ -120,9 +124,9 @@ export const useAdminStore = create<AdminState>((set, get) => ({
 
   updateUsuario: async (id, data) => {
     try {
-      const updatedUser = await api.put<User>(`/admin/usuarios/${id}`, data);
+      await api.put(`/admin/usuarios/${id}`, data);
       set((state) => ({
-        usuarios: state.usuarios.map(u => u.id === id ? { ...u, ...updatedUser } : u)
+        usuarios: state.usuarios.map(u => u.id === id ? { ...u, ...data } : u)
       }));
     } catch (error) {
       console.error('Error updating user:', error);
@@ -132,20 +136,40 @@ export const useAdminStore = create<AdminState>((set, get) => ({
 
   createHistoria: async (data) => {
     try {
-      const newHistoria = await api.post<Historia>('/admin/historias', data);
-      set((state) => ({
-        historias: [...state.historias, newHistoria]
-      }));
+      await api.post('/admin/historias', data);
+      await get().fetchHistorias();
     } catch (error) {
       console.error('Error creating story:', error);
       throw error;
     }
   },
 
+  updateHistoria: async (id, data) => {
+    try {
+      await api.put(`/admin/historias/${id}`, data);
+      await get().fetchHistorias();
+    } catch (error) {
+      console.error('Error updating story:', error);
+      throw error;
+    }
+  },
+
+  deleteHistoria: async (id) => {
+    try {
+      await api.delete(`/admin/historias/${id}`);
+      set((state) => ({
+        historias: state.historias.filter(h => h.id !== id)
+      }));
+    } catch (error) {
+      console.error('Error deleting story:', error);
+      throw error;
+    }
+  },
+
   fetchCapitulos: async (historiaId) => {
     try {
-      const capitulos = await api.get<Capitulo[]>(`/admin/historias/${historiaId}/capitulos`);
-      set({ capitulos });
+      const response = await api.get<{ data: Capitulo[] }>(`/admin/historias/${historiaId}/capitulos`);
+      set({ capitulos: response.data });
     } catch (error) {
       console.error('Error fetching chapters:', error);
     }
@@ -153,12 +177,32 @@ export const useAdminStore = create<AdminState>((set, get) => ({
 
   createCapitulo: async (data) => {
     try {
-      const newCapitulo = await api.post<Capitulo>('/admin/capitulos', data);
-      set((state) => ({
-        capitulos: [...state.capitulos, newCapitulo]
-      }));
+      await api.post('/admin/capitulos', data);
+      await get().fetchCapitulos(data.historia_id);
     } catch (error) {
       console.error('Error creating chapter:', error);
+      throw error;
+    }
+  },
+
+  updateCapitulo: async (id, historiaId, data) => {
+    try {
+      await api.put(`/admin/capitulos/${id}`, data);
+      await get().fetchCapitulos(historiaId);
+    } catch (error) {
+      console.error('Error updating chapter:', error);
+      throw error;
+    }
+  },
+
+  deleteCapitulo: async (id) => {
+    try {
+      await api.delete(`/admin/capitulos/${id}`);
+      set((state) => ({
+        capitulos: state.capitulos.filter(c => c.id !== id)
+      }));
+    } catch (error) {
+      console.error('Error deleting chapter:', error);
       throw error;
     }
   }

@@ -1,4 +1,4 @@
-const { getDb } = require('../database/db');
+const { getDb, runExclusive } = require('../database/db');
 const crypto = require('crypto');
 
 /**
@@ -26,7 +26,7 @@ const obterCapitulo = async (req, res, next) => {
 
     // SQLite converte BOOLEAN para 0/1
     const isGratuito = capitulo.is_gratuito === 1 || capitulo.is_gratuito === true;
-    
+
     // 2. Capítulo gratuito → acesso livre
     if (isGratuito) {
       return res.json({
@@ -58,101 +58,120 @@ const obterCapitulo = async (req, res, next) => {
       });
     }
 
-    // 4. Buscar dados do usuário
-    const usuario = await db.get(
-      'SELECT id, plano, vip_expira_em, saldo_moedas FROM usuarios WHERE id = ?',
-      [req.userId]
-    );
+    // A partir daqui, débito de moedas e criação de leitura precisam ser atômicos.
+    // A conexão SQLite é única e compartilhada por todas as requisições, então
+    // BEGIN/COMMIT concorrentes na mesma conexão colidiriam entre si — runExclusive
+    // serializa este bloco para que uma requisição termine antes da próxima começar,
+    // evitando débito duplicado quando o mesmo capítulo é solicitado em paralelo.
+    return await runExclusive(async () => {
+      await db.run('BEGIN IMMEDIATE');
+      try {
+        // 4. Buscar dados do usuário
+        const usuario = await db.get(
+          'SELECT id, plano, vip_expira_em, saldo_moedas FROM usuarios WHERE id = ?',
+          [req.userId]
+        );
 
-    if (!usuario) {
-      return res.status(404).json({ error: 'Usuário não encontrado no banco de dados.' });
-    }
+        if (!usuario) {
+          await db.run('ROLLBACK');
+          return res.status(404).json({ error: 'Usuário não encontrado no banco de dados.' });
+        }
 
-    // 5. Verificar se é VIP ativo
-    if (usuario.plano === 'vip' && usuario.vip_expira_em) {
-      const vipExpira = new Date(usuario.vip_expira_em);
-      if (vipExpira > new Date()) {
+        // 5. Verificar se é VIP ativo
+        if (usuario.plano === 'vip' && usuario.vip_expira_em) {
+          const vipExpira = new Date(usuario.vip_expira_em);
+          if (vipExpira > new Date()) {
+            await db.run('COMMIT');
+            return res.json({
+              data: {
+                acesso: true,
+                motivo: 'vip',
+                capitulo: {
+                  ...capitulo,
+                  is_gratuito: false
+                },
+              },
+            });
+          }
+        }
+
+        // 6. Verificar se já tem leitura (releitura gratuita)
+        const leituraExistente = await db.get(
+          'SELECT id FROM leituras WHERE usuario_id = ? AND capitulo_id = ?',
+          [req.userId, id]
+        );
+
+        if (leituraExistente) {
+          await db.run('COMMIT');
+          return res.json({
+            data: {
+              acesso: true,
+              motivo: 'releitura',
+              capitulo: {
+                ...capitulo,
+                is_gratuito: false
+              },
+            },
+          });
+        }
+
+        // 7. Verificar saldo de moedas
+        const custo = capitulo.custo_moedas || 0;
+
+        if (usuario.saldo_moedas >= custo) {
+          // Debitar moedas
+          const novoSaldo = usuario.saldo_moedas - custo;
+
+          await db.run(
+            'UPDATE usuarios SET saldo_moedas = ? WHERE id = ?',
+            [novoSaldo, req.userId]
+          );
+
+          // Criar registro de leitura
+          const leituraId = crypto.randomUUID();
+          await db.run(
+            'INSERT INTO leituras (id, usuario_id, capitulo_id, historia_id, posicao_scroll, percentual_lido) VALUES (?, ?, ?, ?, ?, ?)',
+            [leituraId, req.userId, id, capitulo.historia_id, 0, 0]
+          );
+
+          await db.run('COMMIT');
+
+          return res.json({
+            data: {
+              acesso: true,
+              motivo: 'moedas_debitadas',
+              moedas_gastas: custo,
+              saldo_restante: novoSaldo,
+              capitulo: {
+                ...capitulo,
+                is_gratuito: false
+              },
+            },
+          });
+        }
+
+        // 8. Sem moedas suficientes
+        await db.run('COMMIT');
         return res.json({
           data: {
-            acesso: true,
-            motivo: 'vip',
+            acesso: false,
+            motivo: 'sem_moedas',
+            custo: custo,
+            saldo_atual: usuario.saldo_moedas,
             capitulo: {
-              ...capitulo,
+              id: capitulo.id,
+              historia_id: capitulo.historia_id,
+              numero: capitulo.numero,
+              titulo: capitulo.titulo,
+              custo_moedas: capitulo.custo_moedas,
               is_gratuito: false
             },
           },
         });
+      } catch (error) {
+        await db.run('ROLLBACK').catch(() => {});
+        throw error;
       }
-    }
-
-    // 6. Verificar se já tem leitura (releitura gratuita)
-    const leituraExistente = await db.get(
-      'SELECT id FROM leituras WHERE usuario_id = ? AND capitulo_id = ?',
-      [req.userId, id]
-    );
-
-    if (leituraExistente) {
-      return res.json({
-        data: {
-          acesso: true,
-          motivo: 'releitura',
-          capitulo: {
-            ...capitulo,
-            is_gratuito: false
-          },
-        },
-      });
-    }
-
-    // 7. Verificar saldo de moedas
-    const custo = capitulo.custo_moedas || 0;
-
-    if (usuario.saldo_moedas >= custo) {
-      // Debitar moedas
-      const novoSaldo = usuario.saldo_moedas - custo;
-
-      await db.run(
-        'UPDATE usuarios SET saldo_moedas = ? WHERE id = ?',
-        [novoSaldo, req.userId]
-      );
-
-      // Criar registro de leitura
-      const leituraId = crypto.randomUUID();
-      await db.run(
-        'INSERT INTO leituras (id, usuario_id, capitulo_id, historia_id, posicao_scroll, percentual_lido) VALUES (?, ?, ?, ?, ?, ?)',
-        [leituraId, req.userId, id, capitulo.historia_id, 0, 0]
-      );
-
-      return res.json({
-        data: {
-          acesso: true,
-          motivo: 'moedas_debitadas',
-          moedas_gastas: custo,
-          saldo_restante: novoSaldo,
-          capitulo: {
-            ...capitulo,
-            is_gratuito: false
-          },
-        },
-      });
-    }
-
-    // 8. Sem moedas suficientes
-    return res.json({
-      data: {
-        acesso: false,
-        motivo: 'sem_moedas',
-        custo: custo,
-        saldo_atual: usuario.saldo_moedas,
-        capitulo: {
-          id: capitulo.id,
-          historia_id: capitulo.historia_id,
-          numero: capitulo.numero,
-          titulo: capitulo.titulo,
-          custo_moedas: capitulo.custo_moedas,
-          is_gratuito: false
-        },
-      },
     });
   } catch (err) {
     next(err);

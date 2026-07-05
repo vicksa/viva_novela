@@ -12,6 +12,30 @@ const adminController = {
     }
   },
 
+  async listarHistorias(req, res, next) {
+    try {
+      const db = await getDb();
+      const historias = await db.all('SELECT * FROM historias ORDER BY created_at DESC');
+      res.json({ data: historias });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  async listarCapitulosPorHistoria(req, res, next) {
+    try {
+      const { id } = req.params;
+      const db = await getDb();
+      const capitulos = await db.all(
+        'SELECT * FROM capitulos WHERE historia_id = ? ORDER BY numero ASC',
+        [id]
+      );
+      res.json({ data: capitulos });
+    } catch (error) {
+      next(error);
+    }
+  },
+
   async editarUsuario(req, res, next) {
     try {
       const { id } = req.params;
