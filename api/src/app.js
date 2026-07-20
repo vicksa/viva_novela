@@ -3,7 +3,6 @@ const helmet = require('helmet');
 const cors = require('cors');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
-const path = require('path');
 
 const config = require('./config');
 const { errorHandler } = require('./middleware/errorHandler.middleware');
@@ -68,8 +67,9 @@ app.use('/api/leituras', leiturasRoutes);
 app.use('/api/perfil', perfilRoutes);
 app.use('/api/admin', authRequired, adminRequired, adminRoutes);
 
-// Servir arquivos estáticos (uploads)
-app.use('/uploads', express.static(path.join(__dirname, '../public/uploads')));
+// Servir arquivos estáticos (uploads) — exige disco persistente no Render
+// para as imagens sobreviverem a redeploys (ver render.yaml).
+app.use('/uploads', express.static(config.uploadsDir));
 
 // 404
 app.use((req, res) => {

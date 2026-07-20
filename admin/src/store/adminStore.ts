@@ -58,7 +58,9 @@ interface AdminState extends AuthState {
   // Admin Actions
   fetchUsuarios: () => Promise<void>;
   fetchHistorias: () => Promise<void>;
+  createUsuario: (data: { email: string; nome: string; senha: string; papel?: string }) => Promise<void>;
   updateUsuario: (id: string, data: Partial<User>) => Promise<void>;
+  deleteUsuario: (id: string) => Promise<void>;
   createHistoria: (data: Partial<Historia>) => Promise<void>;
   updateHistoria: (id: string, data: Partial<Historia>) => Promise<void>;
   deleteHistoria: (id: string) => Promise<void>;
@@ -122,6 +124,16 @@ export const useAdminStore = create<AdminState>((set, get) => ({
     }
   },
 
+  createUsuario: async (data) => {
+    try {
+      await api.post('/admin/usuarios', data);
+      await get().fetchUsuarios();
+    } catch (error) {
+      console.error('Error creating user:', error);
+      throw error;
+    }
+  },
+
   updateUsuario: async (id, data) => {
     try {
       await api.put(`/admin/usuarios/${id}`, data);
@@ -130,6 +142,18 @@ export const useAdminStore = create<AdminState>((set, get) => ({
       }));
     } catch (error) {
       console.error('Error updating user:', error);
+      throw error;
+    }
+  },
+
+  deleteUsuario: async (id) => {
+    try {
+      await api.delete(`/admin/usuarios/${id}`);
+      set((state) => ({
+        usuarios: state.usuarios.filter(u => u.id !== id)
+      }));
+    } catch (error) {
+      console.error('Error deleting user:', error);
       throw error;
     }
   },

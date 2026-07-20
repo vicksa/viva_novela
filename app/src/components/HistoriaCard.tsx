@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { Colors, Typography, BorderRadius, Spacing } from '@/constants/theme';
 import Badge from '@/components/ui/Badge';
@@ -27,7 +28,7 @@ function getGradientColors(genero: string): [string, string] {
   return [colors[0], colors[1]];
 }
 
-export default function HistoriaCard({ id, titulo, autor, genero, totalCapitulos = 0 }: HistoriaCardProps) {
+export default function HistoriaCard({ id, titulo, autor, genero, totalCapitulos = 0, capaUrl }: HistoriaCardProps) {
   const router = useRouter();
 
   const handlePress = () => {
@@ -42,13 +43,26 @@ export default function HistoriaCard({ id, titulo, autor, genero, totalCapitulos
       onPress={handlePress}
       style={styles.container}
     >
-      <View style={[styles.cover, { backgroundColor: startColor }]}>
-        <View style={styles.coverInner}>
-          <Text style={styles.coverLetter}>
-            {titulo.charAt(0).toUpperCase()}
-          </Text>
+      <View style={styles.cover}>
+        {capaUrl ? (
+          <Image
+            source={{ uri: capaUrl }}
+            style={StyleSheet.absoluteFill}
+            contentFit="cover"
+            transition={200}
+          />
+        ) : (
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: startColor }]}>
+            <View style={styles.coverInner}>
+              <Text style={styles.coverLetter}>
+                {titulo.charAt(0).toUpperCase()}
+              </Text>
+            </View>
+          </View>
+        )}
+        <View style={styles.badgeWrapper}>
+          <Badge label={genero} variant="new" />
         </View>
-        <Badge label={genero} variant="new" />
       </View>
       <Text style={styles.title} numberOfLines={2}>
         {titulo}
@@ -72,8 +86,6 @@ const styles = StyleSheet.create({
     width: 160,
     height: 200,
     borderRadius: BorderRadius.md,
-    padding: Spacing.sm,
-    justifyContent: 'space-between',
     overflow: 'hidden',
     marginBottom: Spacing.sm,
   },
@@ -81,6 +93,11 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  badgeWrapper: {
+    position: 'absolute',
+    bottom: Spacing.sm,
+    left: Spacing.sm,
   },
   coverLetter: {
     fontFamily: 'PlayfairDisplay_700Bold',

@@ -3,6 +3,7 @@ import { Plus, X, List, Edit2, Trash2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAdminStore, type Historia } from '../store/adminStore';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { api } from '../api';
 
 export const Historias: React.FC = () => {
   const { historias, fetchHistorias, createHistoria, updateHistoria, deleteHistoria } = useAdminStore();
@@ -58,28 +59,18 @@ export const Historias: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!editingId && !capaFile) {
+      alert('Selecione uma imagem de capa.');
+      return;
+    }
+
     setLoading(true);
     try {
       let capa_url = undefined;
       if (capaFile) {
-        const formData = new FormData();
-        formData.append('file', capaFile);
-
-        const token = localStorage.getItem('adminToken');
-        const uploadRes = await fetch('http://localhost:3000/api/admin/upload', {
-          method: 'POST',
-          headers: {
-            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-          },
-          body: formData
-        });
-
-        if (!uploadRes.ok) {
-          throw new Error('Falha no upload da capa');
-        }
-
-        const uploadData = await uploadRes.json();
-        capa_url = uploadData.data.url;
+        const uploadRes = await api.uploadFile<{ data: { url: string } }>('/admin/upload', capaFile);
+        capa_url = uploadRes.data.url;
       }
 
       const payload = {
@@ -233,11 +224,12 @@ export const Historias: React.FC = () => {
                 />
               </div>
               <div className="form-group">
-                <label className="form-label">Capa</label>
+                <label className="form-label">Capa{editingId ? '' : ' (obrigatória)'}</label>
                 <input
                   type="file"
                   className="glass-input"
                   accept="image/*"
+                  required={!editingId}
                   onChange={e => handleCapaChange(e.target.files ? e.target.files[0] : null)}
                 />
                 {capaPreview && (

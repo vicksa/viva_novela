@@ -1,7 +1,21 @@
 const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
 const { getDb } = require('../database/db');
 
 const adminController = {
+  async uploadCapa(req, res, next) {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: 'Nenhum arquivo enviado.' });
+      }
+      // O arquivo já foi salvo em disco pelo multer (upload.middleware.js);
+      // aqui só devolvemos a URL pública pela qual ele fica acessível.
+      res.json({ data: { url: '/uploads/' + req.file.filename } });
+    } catch (error) {
+      next(error);
+    }
+  },
+
   async listarUsuarios(req, res, next) {
     try {
       const db = await getDb();
@@ -61,6 +75,49 @@ const adminController = {
     }
   },
 
+  async criarUsuario(req, res, next) {
+    try {
+      const { email, nome, senha, papel } = req.body;
+      const db = await getDb();
+
+      const existente = await db.get('SELECT id FROM usuarios WHERE email = ?', [email]);
+      if (existente) {
+        return res.status(400).json({ error: 'Este e-mail já está em uso.' });
+      }
+
+      const senhaHash = await bcrypt.hash(senha, 10);
+      const id = crypto.randomUUID();
+
+      await db.run(
+        `INSERT INTO usuarios (id, email, nome, senha, papel, plano, saldo_moedas)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [id, email, nome, senhaHash, papel || 'leitor', 'gratuito', 0]
+      );
+
+      res.status(201).json({ data: { id, message: 'Usuário criado com sucesso.' } });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  async deletarUsuario(req, res, next) {
+    try {
+      const { id } = req.params;
+      const db = await getDb();
+
+      const usuario = await db.get('SELECT id FROM usuarios WHERE id = ?', [id]);
+      if (!usuario) {
+        return res.status(404).json({ error: 'Usuário não encontrado.' });
+      }
+
+      await db.run('DELETE FROM usuarios WHERE id = ?', [id]);
+
+      res.json({ data: { message: 'Usuário deletado com sucesso.' } });
+    } catch (error) {
+      next(error);
+    }
+  },
+
   async criarHistoria(req, res, next) {
     try {
       const { titulo, sinopse, autora, capa_url, genero, tags, destaque, total_capitulos, status } = req.body;
@@ -70,7 +127,7 @@ const adminController = {
       await db.run(
         `INSERT INTO historias (id, titulo, sinopse, autora, capa_url, genero, tags, destaque, total_capitulos, status)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [id, titulo, sinopse, autora, capa_url, genero, tags, destaque ? 1 : 0, total_capitulos || 0, status || 'ativo']
+        [id, titulo, sinopse, autora, capa_url, genero, tags || null, !!destaque, total_capitulos || 0, status || 'ativo']
       );
 
       res.status(201).json({ data: { id, message: 'História criada com sucesso.' } });
@@ -105,8 +162,8 @@ const adminController = {
       `;
 
       await db.run(query, [
-        titulo, sinopse, autora, capa_url, genero, tags, 
-        destaque !== undefined ? (destaque ? 1 : 0) : null, 
+        titulo, sinopse, autora, capa_url, genero, tags || null,
+        destaque !== undefined ? !!destaque : null,
         total_capitulos, status, id
       ]);
 
@@ -144,7 +201,7 @@ const adminController = {
       await db.run(
         `INSERT INTO capitulos (id, historia_id, titulo, conteudo, numero, is_gratuito, custo_moedas)
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [id, historia_id, titulo, conteudo, numero, is_gratuito ? 1 : 0, custo_moedas || 0]
+        [id, historia_id, titulo, conteudo, numero, !!is_gratuito, custo_moedas || 0]
       );
 
       res.status(201).json({ data: { id, message: 'Capítulo criado com sucesso.' } });
@@ -175,8 +232,8 @@ const adminController = {
       `;
 
       await db.run(query, [
-        titulo, conteudo, numero, 
-        is_gratuito !== undefined ? (is_gratuito ? 1 : 0) : null, 
+        titulo, conteudo, numero,
+        is_gratuito !== undefined ? !!is_gratuito : null,
         custo_moedas, id
       ]);
 

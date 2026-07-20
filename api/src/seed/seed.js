@@ -9,7 +9,7 @@ const historiasData = [
     capa_url: 'https://images.unsplash.com/photo-1518199266791-5375a83190b7?auto=format&fit=crop&w=400&q=80',
     genero: 'Romance',
     autora: 'Ana Beatriz',
-    tags: JSON.stringify(['romance', 'drama', 'paixão', 'perigo']),
+    tags: ['romance', 'drama', 'paixão', 'perigo'],
     destaque: true,
     status: 'ativo'
   },
@@ -19,7 +19,7 @@ const historiasData = [
     capa_url: 'https://images.unsplash.com/photo-1509248961158-e54f6934749c?auto=format&fit=crop&w=400&q=80',
     genero: 'Suspense',
     autora: 'Clara Montenegro',
-    tags: JSON.stringify(['suspense', 'mistério', 'sobrenatural', 'romance']),
+    tags: ['suspense', 'mistério', 'sobrenatural', 'romance'],
     destaque: true,
     status: 'ativo'
   },
@@ -29,7 +29,7 @@ const historiasData = [
     capa_url: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=400&q=80',
     genero: 'Comédia Romântica',
     autora: 'Isabella Santos',
-    tags: JSON.stringify(['comédia', 'romance', 'leve', 'rivais-para-amantes']),
+    tags: ['comédia', 'romance', 'leve', 'rivais-para-amantes'],
     destaque: false,
     status: 'ativo'
   }

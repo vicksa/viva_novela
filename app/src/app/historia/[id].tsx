@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { StyleSheet, View, Text, ScrollView, Pressable, FlatList, ActivityIndicator, SafeAreaView } from 'react-native';
+import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Colors, Typography, Spacing, BorderRadius } from '@/constants/theme';
 import { useHistoria, useCapitulos } from '@/hooks/useHistorias';
@@ -45,11 +46,23 @@ export default function HistoriaDetalheScreen() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         {/* Cover image area with back button */}
         <View style={styles.coverContainer}>
-          <View style={styles.coverPlaceholder}>
-            <Text style={styles.coverIcon}>🌹</Text>
-            <View style={[styles.coverOverlay, { backgroundColor: Colors.primaryDark + '80' }]} />
-          </View>
-          
+          {historia.capaUrl ? (
+            <>
+              <Image
+                source={{ uri: historia.capaUrl }}
+                style={StyleSheet.absoluteFill}
+                contentFit="cover"
+                transition={200}
+              />
+              <View style={[styles.coverOverlay, { backgroundColor: Colors.primaryDark + '80' }]} />
+            </>
+          ) : (
+            <View style={styles.coverPlaceholder}>
+              <Text style={styles.coverIcon}>🌹</Text>
+              <View style={[styles.coverOverlay, { backgroundColor: Colors.primaryDark + '80' }]} />
+            </View>
+          )}
+
           <Pressable onPress={() => router.back()} style={styles.backButton}>
             <Text style={styles.backButtonText}>✕</Text>
           </Pressable>

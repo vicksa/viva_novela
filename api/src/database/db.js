@@ -1,103 +1,70 @@
-const sqlite3 = require('sqlite3').verbose();
-const { open } = require('sqlite');
-const path = require('path');
+const { Pool } = require('pg');
+const config = require('../config');
 
-let db;
-let filaExclusiva = Promise.resolve();
+let pool;
+
+function getPool() {
+  if (!pool) {
+    pool = new Pool({
+      connectionString: config.databaseUrl,
+      ssl: { rejectUnauthorized: false },
+    });
+  }
+  return pool;
+}
 
 /**
- * A conexão SQLite é uma única e compartilhada por todas as requisições, então
- * BEGIN/COMMIT concorrentes na mesma conexão colidem ("cannot start a transaction
- * within a transaction"). runExclusive serializa blocos que precisam de transação
- * (ex: leitura+débito de moedas), garantindo que um termine antes do próximo começar.
+ * Os controllers escrevem SQL com placeholders posicionais `?` (herdados da
+ * era SQLite). O Postgres exige `$1, $2, ...` — converte automaticamente na
+ * ordem em que aparecem, para não precisar reescrever cada query manualmente.
  */
-function runExclusive(fn) {
-  const execucao = filaExclusiva.then(() => fn());
-  filaExclusiva = execucao.then(() => {}, () => {});
-  return execucao;
+function toPgSql(sql) {
+  let i = 0;
+  return sql.replace(/\?/g, () => `$${++i}`);
+}
+
+function wrapQueryable(queryable) {
+  return {
+    async get(sql, params = []) {
+      const result = await queryable.query(toPgSql(sql), params);
+      return result.rows[0];
+    },
+    async all(sql, params = []) {
+      const result = await queryable.query(toPgSql(sql), params);
+      return result.rows;
+    },
+    async run(sql, params = []) {
+      return queryable.query(toPgSql(sql), params);
+    },
+  };
 }
 
 async function getDb() {
-  if (db) return db;
-  
-  db = await open({
-    filename: path.join(__dirname, 'database.sqlite'),
-    driver: sqlite3.Database
-  });
-
-  // Evita erro "database is locked" sob concorrência: espera até 5s antes de falhar.
-  await db.run('PRAGMA busy_timeout = 5000');
-
-  await initializeDatabase();
-  
-  return db;
+  return wrapQueryable(getPool());
 }
 
-async function initializeDatabase() {
-  await db.exec(`
-    CREATE TABLE IF NOT EXISTS usuarios (
-      id TEXT PRIMARY KEY,
-      email TEXT UNIQUE NOT NULL,
-      nome TEXT NOT NULL,
-      senha TEXT NOT NULL,
-      plano TEXT DEFAULT 'gratuito',
-      saldo_moedas INTEGER DEFAULT 0,
-      vip_expira_em DATETIME,
-      criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
-      papel TEXT DEFAULT 'leitor'
-    );
-
-    CREATE TABLE IF NOT EXISTS historias (
-      id TEXT PRIMARY KEY,
-      titulo TEXT NOT NULL,
-      sinopse TEXT,
-      autora TEXT,
-      capa_url TEXT,
-      genero TEXT,
-      tags TEXT,
-      destaque BOOLEAN DEFAULT false,
-      total_capitulos INTEGER DEFAULT 0,
-      status TEXT DEFAULT 'ativo',
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
-
-    CREATE TABLE IF NOT EXISTS capitulos (
-      id TEXT PRIMARY KEY,
-      historia_id TEXT NOT NULL,
-      titulo TEXT NOT NULL,
-      conteudo TEXT NOT NULL,
-      numero INTEGER NOT NULL,
-      is_gratuito BOOLEAN DEFAULT false,
-      custo_moedas INTEGER DEFAULT 0,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      publicado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY(historia_id) REFERENCES historias(id)
-    );
-
-    CREATE TABLE IF NOT EXISTS leituras (
-      id TEXT PRIMARY KEY,
-      usuario_id TEXT NOT NULL,
-      historia_id TEXT NOT NULL,
-      capitulo_id TEXT NOT NULL,
-      posicao_scroll INTEGER DEFAULT 0,
-      percentual_lido REAL DEFAULT 0,
-      lido_em DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY(usuario_id) REFERENCES usuarios(id),
-      FOREIGN KEY(historia_id) REFERENCES historias(id),
-      FOREIGN KEY(capitulo_id) REFERENCES capitulos(id),
-      UNIQUE(usuario_id, capitulo_id)
-    );
-  `);
-
+/**
+ * Executa fn(db) dentro de uma transação real do Postgres, usando um único
+ * client dedicado do pool (BEGIN/COMMIT/ROLLBACK). Use para operações que
+ * precisam ser atômicas (ex: checar saldo + debitar moedas + criar leitura).
+ */
+async function withTransaction(fn) {
+  const client = await getPool().connect();
   try {
-    await db.exec(`ALTER TABLE usuarios ADD COLUMN papel TEXT DEFAULT 'leitor';`);
+    await client.query('BEGIN');
+    const db = wrapQueryable(client);
+    const result = await fn(db);
+    await client.query('COMMIT');
+    return result;
   } catch (error) {
-    // A coluna já pode existir
+    await client.query('ROLLBACK').catch(() => {});
+    throw error;
+  } finally {
+    client.release();
   }
 }
 
 module.exports = {
   getDb,
-  runExclusive
+  withTransaction,
 };

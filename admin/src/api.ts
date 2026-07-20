@@ -1,4 +1,4 @@
-const API_URL = 'http://localhost:3000/api';
+const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api';
 
 interface FetchOptions extends RequestInit {
   data?: any;
@@ -8,7 +8,7 @@ export const api = {
   async fetch<T>(endpoint: string, options: FetchOptions = {}): Promise<T> {
     const token = localStorage.getItem('adminToken');
     const headers = new Headers(options.headers || {});
-    
+
     if (token) {
       headers.set('Authorization', `Bearer ${token}`);
     }
@@ -45,5 +45,30 @@ export const api = {
 
   delete<T>(endpoint: string, options?: FetchOptions) {
     return this.fetch<T>(endpoint, { ...options, method: 'DELETE' });
-  }
+  },
+
+  async uploadFile<T>(endpoint: string, file: File): Promise<T> {
+    const token = localStorage.getItem('adminToken');
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const headers = new Headers();
+    if (token) {
+      headers.set('Authorization', `Bearer ${token}`);
+    }
+    // Não define Content-Type: o browser define o boundary do multipart sozinho.
+
+    const response = await fetch(`${API_URL}${endpoint}`, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || 'Falha no upload.');
+    }
+
+    return response.json();
+  },
 };

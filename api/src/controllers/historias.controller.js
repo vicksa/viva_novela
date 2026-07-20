@@ -11,7 +11,7 @@ function formatarHistoria(item) {
     totalCapitulos: item.total_capitulos,
     destaque: !!item.destaque,
     criadoEm: item.created_at,
-    tags: item.tags ? JSON.parse(item.tags) : [],
+    tags: item.tags || [],
   };
 }
 
@@ -42,7 +42,7 @@ const listar = async (req, res, next) => {
     }
 
     if (destaque === 'true' || destaque === '1' || destaque === 1) {
-      whereClauses.push("destaque = 1");
+      whereClauses.push("destaque = true");
     }
 
     let orderClause = "ORDER BY created_at DESC";

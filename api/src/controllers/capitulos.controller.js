@@ -1,4 +1,4 @@
-const { getDb, runExclusive } = require('../database/db');
+const { getDb, withTransaction } = require('../database/db');
 const crypto = require('crypto');
 
 /**
@@ -24,7 +24,6 @@ const obterCapitulo = async (req, res, next) => {
       return res.status(404).json({ error: 'Capítulo não encontrado.' });
     }
 
-    // SQLite converte BOOLEAN para 0/1
     const isGratuito = capitulo.is_gratuito === 1 || capitulo.is_gratuito === true;
 
     // 2. Capítulo gratuito → acesso livre
@@ -58,101 +57,95 @@ const obterCapitulo = async (req, res, next) => {
       });
     }
 
-    // A partir daqui, débito de moedas e criação de leitura precisam ser atômicos.
-    // A conexão SQLite é única e compartilhada por todas as requisições, então
-    // BEGIN/COMMIT concorrentes na mesma conexão colidiriam entre si — runExclusive
-    // serializa este bloco para que uma requisição termine antes da próxima começar,
-    // evitando débito duplicado quando o mesmo capítulo é solicitado em paralelo.
-    return await runExclusive(async () => {
-      await db.run('BEGIN IMMEDIATE');
-      try {
-        // 4. Buscar dados do usuário
-        const usuario = await db.get(
-          'SELECT id, plano, vip_expira_em, saldo_moedas FROM usuarios WHERE id = ?',
-          [req.userId]
-        );
+    // A partir daqui, checar saldo + debitar moedas + criar leitura precisa ser
+    // atômico para não debitar em duplicidade sob requisições concorrentes.
+    // `SELECT ... FOR UPDATE` trava a linha do usuário até o COMMIT, então uma
+    // segunda requisição concorrente para o mesmo usuário espera esta terminar
+    // antes de ler o saldo (em vez de ambas lerem o mesmo saldo desatualizado).
+    const resultado = await withTransaction(async (tdb) => {
+      // 4. Buscar dados do usuário (com lock de linha)
+      const usuario = await tdb.get(
+        'SELECT id, plano, vip_expira_em, saldo_moedas FROM usuarios WHERE id = ? FOR UPDATE',
+        [req.userId]
+      );
 
-        if (!usuario) {
-          await db.run('ROLLBACK');
-          return res.status(404).json({ error: 'Usuário não encontrado no banco de dados.' });
-        }
+      if (!usuario) {
+        return { status: 404, body: { error: 'Usuário não encontrado no banco de dados.' } };
+      }
 
-        // 5. Verificar se é VIP ativo
-        if (usuario.plano === 'vip' && usuario.vip_expira_em) {
-          const vipExpira = new Date(usuario.vip_expira_em);
-          if (vipExpira > new Date()) {
-            await db.run('COMMIT');
-            return res.json({
+      // 5. Verificar se é VIP ativo
+      if (usuario.plano === 'vip' && usuario.vip_expira_em) {
+        const vipExpira = new Date(usuario.vip_expira_em);
+        if (vipExpira > new Date()) {
+          return {
+            status: 200,
+            body: {
               data: {
                 acesso: true,
                 motivo: 'vip',
-                capitulo: {
-                  ...capitulo,
-                  is_gratuito: false
-                },
+                capitulo: { ...capitulo, is_gratuito: false },
               },
-            });
-          }
+            },
+          };
         }
+      }
 
-        // 6. Verificar se já tem leitura (releitura gratuita)
-        const leituraExistente = await db.get(
-          'SELECT id FROM leituras WHERE usuario_id = ? AND capitulo_id = ?',
-          [req.userId, id]
-        );
+      // 6. Verificar se já tem leitura (releitura gratuita)
+      const leituraExistente = await tdb.get(
+        'SELECT id FROM leituras WHERE usuario_id = ? AND capitulo_id = ?',
+        [req.userId, id]
+      );
 
-        if (leituraExistente) {
-          await db.run('COMMIT');
-          return res.json({
+      if (leituraExistente) {
+        return {
+          status: 200,
+          body: {
             data: {
               acesso: true,
               motivo: 'releitura',
-              capitulo: {
-                ...capitulo,
-                is_gratuito: false
-              },
+              capitulo: { ...capitulo, is_gratuito: false },
             },
-          });
-        }
+          },
+        };
+      }
 
-        // 7. Verificar saldo de moedas
-        const custo = capitulo.custo_moedas || 0;
+      // 7. Verificar saldo de moedas
+      const custo = capitulo.custo_moedas || 0;
 
-        if (usuario.saldo_moedas >= custo) {
-          // Debitar moedas
-          const novoSaldo = usuario.saldo_moedas - custo;
+      if (usuario.saldo_moedas >= custo) {
+        // Debitar moedas
+        const novoSaldo = usuario.saldo_moedas - custo;
 
-          await db.run(
-            'UPDATE usuarios SET saldo_moedas = ? WHERE id = ?',
-            [novoSaldo, req.userId]
-          );
+        await tdb.run(
+          'UPDATE usuarios SET saldo_moedas = ? WHERE id = ?',
+          [novoSaldo, req.userId]
+        );
 
-          // Criar registro de leitura
-          const leituraId = crypto.randomUUID();
-          await db.run(
-            'INSERT INTO leituras (id, usuario_id, capitulo_id, historia_id, posicao_scroll, percentual_lido) VALUES (?, ?, ?, ?, ?, ?)',
-            [leituraId, req.userId, id, capitulo.historia_id, 0, 0]
-          );
+        // Criar registro de leitura
+        const leituraId = crypto.randomUUID();
+        await tdb.run(
+          'INSERT INTO leituras (id, usuario_id, capitulo_id, historia_id, posicao_scroll, percentual_lido) VALUES (?, ?, ?, ?, ?, ?)',
+          [leituraId, req.userId, id, capitulo.historia_id, 0, 0]
+        );
 
-          await db.run('COMMIT');
-
-          return res.json({
+        return {
+          status: 200,
+          body: {
             data: {
               acesso: true,
               motivo: 'moedas_debitadas',
               moedas_gastas: custo,
               saldo_restante: novoSaldo,
-              capitulo: {
-                ...capitulo,
-                is_gratuito: false
-              },
+              capitulo: { ...capitulo, is_gratuito: false },
             },
-          });
-        }
+          },
+        };
+      }
 
-        // 8. Sem moedas suficientes
-        await db.run('COMMIT');
-        return res.json({
+      // 8. Sem moedas suficientes
+      return {
+        status: 200,
+        body: {
           data: {
             acesso: false,
             motivo: 'sem_moedas',
@@ -167,12 +160,11 @@ const obterCapitulo = async (req, res, next) => {
               is_gratuito: false
             },
           },
-        });
-      } catch (error) {
-        await db.run('ROLLBACK').catch(() => {});
-        throw error;
-      }
+        },
+      };
     });
+
+    return res.status(resultado.status).json(resultado.body);
   } catch (err) {
     next(err);
   }

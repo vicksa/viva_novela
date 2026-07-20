@@ -10,17 +10,19 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- TABELAS
 -- ============================================================
 
--- Tabela de usuários (complementa auth.users do Supabase)
-CREATE TABLE users (
+-- Tabela de usuários (autenticação própria via JWT/bcrypt, não usa auth.users do Supabase)
+CREATE TABLE usuarios (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   nome VARCHAR(120) NOT NULL,
   email VARCHAR(255) UNIQUE NOT NULL,
+  senha TEXT NOT NULL,
+  papel TEXT NOT NULL DEFAULT 'leitor',
   saldo_moedas INTEGER DEFAULT 0,
-  plano VARCHAR(10) DEFAULT 'free' CHECK (plano IN ('free','vip')),
+  plano VARCHAR(10) DEFAULT 'gratuito' CHECK (plano IN ('gratuito','vip')),
   vip_expira_em TIMESTAMP,
   avatar_url TEXT,
   fcm_token TEXT,
-  data_cadastro TIMESTAMP DEFAULT NOW(),
+  criado_em TIMESTAMP DEFAULT NOW(),
   ultimo_acesso TIMESTAMP DEFAULT NOW()
 );
 
@@ -37,7 +39,7 @@ CREATE TABLE historias (
   autora VARCHAR(120) NOT NULL,
   tags TEXT[],
   destaque BOOLEAN DEFAULT FALSE,
-  criado_em TIMESTAMP DEFAULT NOW()
+  created_at TIMESTAMP DEFAULT NOW()
 );
 
 -- Tabela de capítulos
@@ -50,14 +52,14 @@ CREATE TABLE capitulos (
   custo_moedas INTEGER DEFAULT 5,
   is_gratuito BOOLEAN DEFAULT FALSE,
   publicado_em TIMESTAMP,
-  criado_em TIMESTAMP DEFAULT NOW(),
+  created_at TIMESTAMP DEFAULT NOW(),
   UNIQUE(historia_id, numero)
 );
 
 -- Tabela de leituras (progresso por usuário/capítulo)
 CREATE TABLE leituras (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  usuario_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  usuario_id UUID REFERENCES usuarios(id) ON DELETE CASCADE,
   capitulo_id UUID REFERENCES capitulos(id) ON DELETE CASCADE,
   historia_id UUID REFERENCES historias(id) ON DELETE CASCADE,
   posicao_scroll FLOAT DEFAULT 0.0,
@@ -69,7 +71,7 @@ CREATE TABLE leituras (
 -- Tabela de compras
 CREATE TABLE compras (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  usuario_id UUID REFERENCES users(id),
+  usuario_id UUID REFERENCES usuarios(id),
   tipo VARCHAR(20) NOT NULL CHECK (tipo IN ('moedas','assinatura')),
   valor_reais DECIMAL(10,2) NOT NULL,
   moedas_creditadas INTEGER,
@@ -82,7 +84,7 @@ CREATE TABLE compras (
 -- Tabela de biblioteca (histórias salvas)
 CREATE TABLE biblioteca (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  usuario_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  usuario_id UUID REFERENCES usuarios(id) ON DELETE CASCADE,
   historia_id UUID REFERENCES historias(id) ON DELETE CASCADE,
   salvo_em TIMESTAMP DEFAULT NOW(),
   UNIQUE(usuario_id, historia_id)
@@ -148,50 +150,17 @@ CREATE INDEX idx_historias_genero ON historias(genero);
 CREATE INDEX idx_historias_destaque ON historias(destaque) WHERE destaque = TRUE;
 
 -- ============================================================
--- ROW LEVEL SECURITY (RLS)
+-- CONTROLE DE ACESSO
 -- ============================================================
-
--- Habilitar RLS
-ALTER TABLE users ENABLE ROW LEVEL SECURITY;
-ALTER TABLE leituras ENABLE ROW LEVEL SECURITY;
-ALTER TABLE compras ENABLE ROW LEVEL SECURITY;
-ALTER TABLE biblioteca ENABLE ROW LEVEL SECURITY;
-
--- Histórias e capítulos são públicos (leitura), sem RLS para SELECT
--- O controle de acesso ao conteúdo é feito pela API
-
--- Políticas para users
-CREATE POLICY users_select_self ON users
-  FOR SELECT USING (id = (SELECT auth.uid()));
-
-CREATE POLICY users_update_self ON users
-  FOR UPDATE USING (id = (SELECT auth.uid()));
-
--- Políticas para leituras
-CREATE POLICY leituras_select_self ON leituras
-  FOR SELECT USING (usuario_id = (SELECT auth.uid()));
-
-CREATE POLICY leituras_insert_self ON leituras
-  FOR INSERT WITH CHECK (usuario_id = (SELECT auth.uid()));
-
-CREATE POLICY leituras_update_self ON leituras
-  FOR UPDATE USING (usuario_id = (SELECT auth.uid()));
-
--- Políticas para compras
-CREATE POLICY compras_select_self ON compras
-  FOR SELECT USING (usuario_id = (SELECT auth.uid()));
-
--- Políticas para biblioteca
-CREATE POLICY biblioteca_all_self ON biblioteca
-  FOR ALL USING (usuario_id = (SELECT auth.uid()));
+-- Este banco roda em Postgres puro (não Supabase), acessado apenas pela API
+-- via connection string privilegiada, com autenticação própria (JWT + bcrypt,
+-- coluna usuarios.papel). Todo o controle de acesso — inclusive o que cada
+-- usuário pode ler/editar — é feito na camada da API, não via RLS do Postgres
+-- (RLS do Supabase depende de auth.uid(), que não existe fora do Supabase).
 
 -- ============================================================
--- STORAGE BUCKETS (criar via Dashboard do Supabase)
+-- UPLOADS (capas das histórias)
 -- ============================================================
--- Bucket 'capas' → Público (para capas das histórias)
--- Bucket 'avatars' → Autenticado (para fotos de perfil)
---
--- Instruções:
--- 1. No Dashboard do Supabase, vá em Storage
--- 2. Crie bucket 'capas' com acesso público
--- 3. Crie bucket 'avatars' com acesso autenticado
+-- Os arquivos de capa são salvos em disco pela API (multer) e servidos em
+-- /uploads/<arquivo>. Em produção, isso exige um disco persistente montado
+-- no serviço (ver render.yaml) — sem isso, os uploads somem a cada deploy.

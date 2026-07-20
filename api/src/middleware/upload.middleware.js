@@ -1,5 +1,6 @@
 const multer = require('multer');
 const path = require('path');
+const config = require('../config');
 
 const TIPOS_PERMITIDOS = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const EXTENSOES_PERMITIDAS = new Set(['.jpg', '.jpeg', '.png', '.webp']);
@@ -7,7 +8,7 @@ const TAMANHO_MAXIMO_BYTES = 5 * 1024 * 1024; // 5MB
 
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    cb(null, path.join(__dirname, '../../public/uploads'));
+    cb(null, config.uploadsDir);
   },
   filename: function (req, file, cb) {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);

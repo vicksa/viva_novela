@@ -7,6 +7,7 @@ import {
   Dimensions,
   TouchableOpacity,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { Colors, Typography, BorderRadius, Spacing } from '@/constants/theme';
 import type { Historia } from '@/hooks/useHistorias';
@@ -37,12 +38,25 @@ function DestaqueCard({ item, index }: { item: Historia; index: number }) {
       onPress={() => router.push(`/historia/${item.id}`)}
       style={[styles.card, { backgroundColor: colors[0] }]}
     >
+      {item.capaUrl && (
+        <>
+          <Image
+            source={{ uri: item.capaUrl }}
+            style={StyleSheet.absoluteFill}
+            contentFit="cover"
+            transition={200}
+          />
+          <View style={[StyleSheet.absoluteFill, styles.imageScrim]} />
+        </>
+      )}
       <View style={styles.cardOverlay}>
-        <View style={styles.decorativeCircle}>
-          <Text style={styles.decorativeLetter}>
-            {item.titulo.charAt(0)}
-          </Text>
-        </View>
+        {!item.capaUrl && (
+          <View style={styles.decorativeCircle}>
+            <Text style={styles.decorativeLetter}>
+              {item.titulo.charAt(0)}
+            </Text>
+          </View>
+        )}
         <View style={styles.cardContent}>
           <Text style={styles.genre}>{item.genero}</Text>
           <Text style={styles.title} numberOfLines={2}>
@@ -97,6 +111,9 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     padding: Spacing.lg,
+  },
+  imageScrim: {
+    backgroundColor: 'rgba(0,0,0,0.35)',
   },
   decorativeCircle: {
     width: 80,
