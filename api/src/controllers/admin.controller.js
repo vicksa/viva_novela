@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const { getDb } = require('../database/db');
+const cloudinary = require('../config/cloudinary');
 
 const adminController = {
   async uploadCapa(req, res, next) {
@@ -8,9 +9,14 @@ const adminController = {
       if (!req.file) {
         return res.status(400).json({ error: 'Nenhum arquivo enviado.' });
       }
-      // O arquivo já foi salvo em disco pelo multer (upload.middleware.js);
-      // aqui só devolvemos a URL pública pela qual ele fica acessível.
-      res.json({ data: { url: '/uploads/' + req.file.filename } });
+
+      const dataUri = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
+      const result = await cloudinary.uploader.upload(dataUri, {
+        folder: 'viva-novela/capas',
+        resource_type: 'image',
+      });
+
+      res.json({ data: { url: result.secure_url } });
     } catch (error) {
       next(error);
     }

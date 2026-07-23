@@ -6,7 +6,7 @@ const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   CORS_ORIGIN: z.string().default('http://localhost:8081,http://localhost:5173,http://localhost:5174'),
   DATABASE_URL: z.string().min(1, 'DATABASE_URL é obrigatória (connection string do Postgres)'),
-  UPLOADS_DIR: z.string().optional(),
+  CLOUDINARY_URL: z.string().min(1, 'CLOUDINARY_URL é obrigatória (cloudinary://<api_key>:<api_secret>@<cloud_name>)'),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -26,10 +26,7 @@ const config = {
   corsOrigins: parsed.data.CORS_ORIGIN.split(',').map((o) => o.trim()),
   isProduction: parsed.data.NODE_ENV === 'production',
   databaseUrl: parsed.data.DATABASE_URL,
-  // Diretório onde as capas enviadas pelo admin são salvas. Em produção,
-  // deve apontar para dentro de um disco persistente do Render (ver render.yaml)
-  // — sem isso, os uploads somem a cada novo deploy.
-  uploadsDir: parsed.data.UPLOADS_DIR || require('path').join(__dirname, '../../public/uploads'),
+  cloudinaryUrl: parsed.data.CLOUDINARY_URL,
 };
 
 module.exports = config;

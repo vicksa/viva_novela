@@ -67,10 +67,6 @@ app.use('/api/leituras', leiturasRoutes);
 app.use('/api/perfil', perfilRoutes);
 app.use('/api/admin', authRequired, adminRequired, adminRoutes);
 
-// Servir arquivos estáticos (uploads) — exige disco persistente no Render
-// para as imagens sobreviverem a redeploys (ver render.yaml).
-app.use('/uploads', express.static(config.uploadsDir));
-
 // 404
 app.use((req, res) => {
   res.status(404).json({ error: 'Rota não encontrada.' });

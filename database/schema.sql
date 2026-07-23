@@ -161,6 +161,7 @@ CREATE INDEX idx_historias_destaque ON historias(destaque) WHERE destaque = TRUE
 -- ============================================================
 -- UPLOADS (capas das histórias)
 -- ============================================================
--- Os arquivos de capa são salvos em disco pela API (multer) e servidos em
--- /uploads/<arquivo>. Em produção, isso exige um disco persistente montado
--- no serviço (ver render.yaml) — sem isso, os uploads somem a cada deploy.
+-- Os arquivos de capa são enviados pela API para o Cloudinary (ver
+-- api/src/config/cloudinary.js e CLOUDINARY_URL), que retorna uma URL
+-- pública permanente — não dependem de disco local nem de disco
+-- persistente do Render.
