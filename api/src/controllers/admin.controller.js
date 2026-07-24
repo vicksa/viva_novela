@@ -62,7 +62,7 @@ const adminController = {
       const { saldo_moedas, plano, papel } = req.body;
       const db = await getDb();
 
-      const usuario = await db.get('SELECT id FROM usuarios WHERE id = ?', [id]);
+      const usuario = await db.get('SELECT id, saldo_moedas, plano, papel FROM usuarios WHERE id = ?', [id]);
       if (!usuario) {
         return res.status(404).json({ error: 'Usuário não encontrado.' });
       }

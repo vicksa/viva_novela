@@ -21,7 +21,9 @@ const validate = (schemas) => {
       next();
     } catch (err) {
       if (err instanceof ZodError) {
-        const mensagens = err.errors.map((e) => ({
+        // Zod v4 renomeou ZodError.errors para .issues (v3 usava .errors).
+        const issues = err.issues || err.errors || [];
+        const mensagens = issues.map((e) => ({
           campo: e.path.join('.'),
           mensagem: e.message,
         }));

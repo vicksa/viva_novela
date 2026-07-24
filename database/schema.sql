@@ -63,8 +63,9 @@ CREATE TABLE leituras (
   capitulo_id UUID REFERENCES capitulos(id) ON DELETE CASCADE,
   historia_id UUID REFERENCES historias(id) ON DELETE CASCADE,
   posicao_scroll FLOAT DEFAULT 0.0,
-  concluido BOOLEAN DEFAULT FALSE,
+  percentual_lido FLOAT DEFAULT 0.0,
   lido_em TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW(),
   UNIQUE(usuario_id, capitulo_id)
 );
 
