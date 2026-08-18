@@ -1,10 +1,9 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { StyleSheet, View, Text, ScrollView, Pressable, ActivityIndicator, Alert, SafeAreaView } from 'react-native';
+import { StyleSheet, View, Text, ScrollView, Pressable, ActivityIndicator, SafeAreaView } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Colors, Typography, Spacing, BorderRadius } from '@/constants/theme';
 import { useCapitulo } from '@/hooks/useHistorias';
 import { useReaderStore } from '@/store/readerStore';
-import { useUserStore } from '@/store/userStore';
 import { api } from '@/services/api';
 import Button from '@/components/ui/Button';
 
@@ -14,7 +13,6 @@ export default function LeitorScreen() {
 
   // Stores
   const { fontSize, isDarkMode, increaseFontSize, decreaseFontSize, toggleDarkMode, loadSettings } = useReaderStore();
-  const { fetchProfile } = useUserStore();
 
   // State
   const [showControls, setShowControls] = useState(true);
@@ -25,7 +23,7 @@ export default function LeitorScreen() {
   const lastSavedProgress = useRef(0);
   const saveTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const { data: result, isLoading, refetch } = useCapitulo(capituloId || '');
+  const { data: result, isLoading } = useCapitulo(capituloId || '');
 
   useEffect(() => {
     loadSettings();
@@ -67,18 +65,8 @@ export default function LeitorScreen() {
     };
   }, []);
 
-  const handleComprarMoedas = () => {
-    Alert.alert('Loja de Moedas', 'A loja de moedas estará disponível em breve!');
-  };
-
-  const handleDestravarCapitulo = async () => {
-    // Re-fetch to trigger debiting of coins if user now has enough
-    try {
-      await refetch();
-      await fetchProfile(); // Update local coins balance in userStore
-    } catch (err: any) {
-      Alert.alert('Erro', err.message || 'Falha ao processar o pagamento.');
-    }
+  const handleAssinarVip = () => {
+    router.push('/assinatura');
   };
 
   if (isLoading || !capituloId) {
@@ -96,7 +84,6 @@ export default function LeitorScreen() {
     const themeSub = isDarkMode ? Colors.textSecondary : Colors.textMuted;
     
     const isLogin = result.motivo === 'login_required';
-    const isSemMoedas = result.motivo === 'sem_moedas';
 
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: themeBg }]}>
@@ -110,19 +97,14 @@ export default function LeitorScreen() {
         <View style={styles.paywallContent}>
           <Text style={styles.lockEmoji}>🔒</Text>
           <Text style={[styles.paywallTitle, { color: themeText }]}>
-            {isLogin ? 'Faça login para continuar' : 'Destrave este capítulo'}
+            {isLogin ? 'Faça login para continuar' : 'Capítulo exclusivo para assinantes'}
           </Text>
-          
-          {isLogin ? (
-            <Text style={[styles.paywallSubtitle, { color: themeSub }]}>
-              Você precisa estar conectada para acessar capítulos VIP e salvar seu progresso.
-            </Text>
-          ) : (
-            <Text style={[styles.paywallSubtitle, { color: themeSub }]}>
-              Este capítulo custa <Text style={{ color: Colors.accent, fontWeight: 'bold' }}>{result.custo} moedas</Text>.
-              {isSemMoedas && ` Seu saldo atual é de ${result.saldo_atual || 0} moedas.`}
-            </Text>
-          )}
+
+          <Text style={[styles.paywallSubtitle, { color: themeSub }]}>
+            {isLogin
+              ? 'Você precisa estar conectada para acessar capítulos VIP e salvar seu progresso.'
+              : 'Assine o Viva Novela VIP para ler este e todos os outros capítulos, sem limites.'}
+          </Text>
 
           {isLogin ? (
             <Button
@@ -131,29 +113,8 @@ export default function LeitorScreen() {
               variant="primary"
               fullWidth
             />
-          ) : isSemMoedas ? (
-            <View style={{ width: '100%' }}>
-              <Button
-                title="Comprar Moedas"
-                onPress={handleComprarMoedas}
-                variant="primary"
-                fullWidth
-                style={{ marginBottom: Spacing.sm }}
-              />
-              <Button
-                title="Tentar Novamente"
-                onPress={handleDestravarCapitulo}
-                variant="secondary"
-                fullWidth
-              />
-            </View>
           ) : (
-            <Button
-              title={`Destravar com ${result.custo} Moedas`}
-              onPress={handleDestravarCapitulo}
-              variant="primary"
-              fullWidth
-            />
+            <Button title="Assinar VIP" onPress={handleAssinarVip} variant="primary" fullWidth />
           )}
         </View>
       </SafeAreaView>

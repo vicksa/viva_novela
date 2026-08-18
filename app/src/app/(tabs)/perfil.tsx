@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { StyleSheet, View, Text, ScrollView, Alert, SafeAreaView } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useAuthStore } from '@/store/authStore';
 import { useUserStore } from '@/store/userStore';
 import { Colors, Typography, Spacing, BorderRadius } from '@/constants/theme';
@@ -7,26 +8,13 @@ import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
 
 export default function PerfilScreen() {
+  const router = useRouter();
   const { user, signOut } = useAuthStore();
-  const { nome, plano, saldoMoedas, fetchProfile, isLoading } = useUserStore();
+  const { nome, plano, fetchProfile, isLoading } = useUserStore();
 
   useEffect(() => {
     fetchProfile();
   }, []);
-
-  const handleComprarMoedas = () => {
-    Alert.alert(
-      'Loja de Moedas',
-      'A loja de moedas estará disponível em breve! No MVP, você pode testar as funções gratuitamente ou ler os capítulos livres.'
-    );
-  };
-
-  const handleUpgradeVip = () => {
-    Alert.alert(
-      'Plano VIP',
-      'Assinaturas VIP com leitura ilimitada estarão disponíveis na próxima versão do Viva Novela!'
-    );
-  };
 
   const handleSair = () => {
     Alert.alert(
@@ -57,24 +45,6 @@ export default function PerfilScreen() {
           <Text style={styles.userEmail}>{user?.email}</Text>
         </View>
 
-        {/* Coins Wallet Card */}
-        <Card style={styles.card}>
-          <View style={styles.cardHeader}>
-            <Text style={styles.cardEmoji}>🪙</Text>
-            <View style={styles.cardHeaderTexts}>
-              <Text style={styles.cardTitle}>Meu Saldo</Text>
-              <Text style={styles.cardValue}>{saldoMoedas} moedas</Text>
-            </View>
-          </View>
-          <Button
-            title="Comprar Moedas"
-            onPress={handleComprarMoedas}
-            variant="secondary"
-            fullWidth
-            style={styles.cardButton}
-          />
-        </Card>
-
         {/* VIP subscription Card */}
         <Card style={styles.card}>
           <View style={styles.cardHeader}>
@@ -88,7 +58,7 @@ export default function PerfilScreen() {
           </View>
           <Button
             title={plano === 'vip' ? 'Gerenciar VIP' : 'Seja VIP Ilimitado'}
-            onPress={handleUpgradeVip}
+            onPress={() => router.push('/assinatura')}
             variant={plano === 'vip' ? 'ghost' : 'primary'}
             fullWidth
             style={styles.cardButton}

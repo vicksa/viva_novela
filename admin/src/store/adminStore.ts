@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { api } from '../api';
+import { api, setTokens, clearTokens, getToken } from '../api';
 
 export interface User {
   id: string;
@@ -8,6 +8,8 @@ export interface User {
   papel: string;
   saldo_moedas: number;
   plano: string;
+  vip_expira_em?: string | null;
+  assinatura_status?: 'pending' | 'authorized' | 'paused' | 'cancelled' | null;
 }
 
 export interface Historia {
@@ -51,7 +53,7 @@ interface AdminState extends AuthState {
   capitulos: Capitulo[];
 
   // Auth Actions
-  login: (token: string, user: User) => void;
+  login: (token: string, refreshToken: string, user: User) => void;
   logout: () => void;
   checkAuth: () => Promise<void>;
 
@@ -72,20 +74,20 @@ interface AdminState extends AuthState {
 
 export const useAdminStore = create<AdminState>((set, get) => ({
   user: null,
-  token: localStorage.getItem('adminToken'),
-  isAuthenticated: !!localStorage.getItem('adminToken'),
+  token: getToken(),
+  isAuthenticated: !!getToken(),
   isLoading: true,
   usuarios: [],
   historias: [],
   capitulos: [],
 
-  login: (token, user) => {
-    localStorage.setItem('adminToken', token);
+  login: (token, refreshToken, user) => {
+    setTokens(token, refreshToken);
     set({ token, user, isAuthenticated: true });
   },
 
   logout: () => {
-    localStorage.removeItem('adminToken');
+    clearTokens();
     set({ token: null, user: null, isAuthenticated: false, usuarios: [], historias: [], capitulos: [] });
   },
 

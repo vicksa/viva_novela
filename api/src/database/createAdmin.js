@@ -1,7 +1,6 @@
 require('dotenv').config();
-const bcrypt = require('bcryptjs');
-const crypto = require('crypto');
 const { getDb } = require('./db');
+const { supabaseAdmin } = require('../config/supabase');
 
 /**
  * Cria (ou reseta a senha de) a conta admin, usando credenciais fornecidas
@@ -24,23 +23,35 @@ async function createAdmin() {
   }
 
   const db = await getDb();
-  const hashed = await bcrypt.hash(senha, 10);
-
   const existing = await db.get('SELECT id FROM usuarios WHERE email = ?', [email]);
+
   if (existing) {
-    await db.run(
-      'UPDATE usuarios SET senha = ?, papel = ? WHERE email = ?',
-      [hashed, 'admin', email]
-    );
+    const { error } = await supabaseAdmin.auth.admin.updateUserById(existing.id, { password: senha });
+    if (error) {
+      console.error('❌ Erro ao atualizar senha no Supabase Auth:', error.message);
+      process.exit(1);
+    }
+    await db.run("UPDATE usuarios SET papel = 'admin' WHERE email = ?", [email]);
     console.log(`✅ Usuário admin (${email}) já existia. Senha atualizada e papel garantido como 'admin'.`);
     return;
   }
 
-  const id = crypto.randomUUID();
+  const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+    email,
+    password: senha,
+    email_confirm: true,
+  });
+
+  if (authError) {
+    console.error('❌ Erro ao criar usuário no Supabase Auth:', authError.message);
+    process.exit(1);
+  }
+
+  const id = authData.user.id;
   await db.run(
-    `INSERT INTO usuarios (id, email, nome, senha, papel, plano, saldo_moedas)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    [id, email, nome, hashed, 'admin', 'vip', 9999]
+    `INSERT INTO usuarios (id, email, nome, papel, plano, saldo_moedas)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [id, email, nome, 'admin', 'vip', 9999]
   );
 
   console.log(`✅ Usuário admin criado com sucesso: ${email}`);

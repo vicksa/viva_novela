@@ -22,15 +22,15 @@ export const Login: React.FC = () => {
       // Assuming a standard auth endpoint, adapt if different:
       // The user mentions POST to /api/auth/login or something similar.
       // Since it's an admin app, maybe /api/admin/login or just /api/auth/login
-      const response = await api.post<{ data: { token: string, usuario: any } }>('/auth/login', { email, senha: password });
-      
-      const { token, usuario } = response.data;
+      const response = await api.post<{ data: { token: string, refreshToken: string, usuario: any } }>('/auth/login', { email, senha: password });
+
+      const { token, refreshToken, usuario } = response.data;
 
       if (usuario.papel !== 'admin') {
         throw new Error('Acesso negado. Apenas administradores.');
       }
 
-      login(token, usuario);
+      login(token, refreshToken, usuario);
       navigate('/');
     } catch (err: any) {
       setError(err.message || 'Falha no login');

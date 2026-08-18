@@ -1,10 +1,22 @@
-const jwt = require('jsonwebtoken');
 const { getDb } = require('../database/db');
-const config = require('../config');
+const { supabaseAuth } = require('../config/supabase');
+
+/**
+ * Valida o token via supabase.auth.getUser() (chama o Auth do Supabase) em vez
+ * de jwt.verify local — este projeto usa chaves de assinatura assimétricas
+ * (ES256, via JWKS), não o segredo HMAC legado, então verificar localmente
+ * exigiria buscar/cachear a chave pública. Usar o SDK evita essa complexidade
+ * e funciona com qualquer esquema de assinatura que o projeto use.
+ */
+async function verifyToken(token) {
+  const { data, error } = await supabaseAuth.auth.getUser(token);
+  if (error || !data?.user) return null;
+  return data.user;
+}
 
 /**
  * Middleware obrigatório de autenticação.
- * Extrai o token Bearer, valida via JWT e anexa userId/userEmail/userPapel ao req.
+ * Extrai o token Bearer, valida via Supabase Auth e anexa userId/userEmail/userPapel ao req.
  */
 const authRequired = async (req, res, next) => {
   try {
@@ -15,24 +27,20 @@ const authRequired = async (req, res, next) => {
     }
 
     const token = authHeader.split(' ')[1];
+    const user = await verifyToken(token);
 
-    try {
-      const decoded = jwt.verify(token, config.jwt.secret);
-      req.userId = decoded.id;
-      req.userEmail = decoded.email;
-
-      const db = await getDb();
-      const user = await db.get('SELECT papel FROM usuarios WHERE id = ?', [req.userId]);
-      if (user) {
-        req.userPapel = user.papel;
-      } else {
-        req.userPapel = 'leitor';
-      }
-
-      next();
-    } catch (error) {
+    if (!user) {
       return res.status(401).json({ error: 'Token inválido ou expirado.' });
     }
+
+    req.userId = user.id;
+    req.userEmail = user.email;
+
+    const db = await getDb();
+    const usuario = await db.get('SELECT papel FROM usuarios WHERE id = ?', [req.userId]);
+    req.userPapel = usuario ? usuario.papel : 'leitor';
+
+    next();
   } catch (err) {
     next(err);
   }
@@ -54,27 +62,23 @@ const authOptional = async (req, res, next) => {
     }
 
     const token = authHeader.split(' ')[1];
+    const user = await verifyToken(token);
 
-    try {
-      const decoded = jwt.verify(token, config.jwt.secret);
-      req.userId = decoded.id;
-      req.userEmail = decoded.email;
-
-      const db = await getDb();
-      const user = await db.get('SELECT papel FROM usuarios WHERE id = ?', [req.userId]);
-      if (user) {
-        req.userPapel = user.papel;
-      } else {
-        req.userPapel = 'leitor';
-      }
-
-      next();
-    } catch (error) {
+    if (!user) {
       req.userId = null;
       req.userEmail = null;
       req.userPapel = null;
-      next();
+      return next();
     }
+
+    req.userId = user.id;
+    req.userEmail = user.email;
+
+    const db = await getDb();
+    const usuario = await db.get('SELECT papel FROM usuarios WHERE id = ?', [req.userId]);
+    req.userPapel = usuario ? usuario.papel : 'leitor';
+
+    next();
   } catch (err) {
     req.userId = null;
     req.userEmail = null;

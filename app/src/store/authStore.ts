@@ -1,6 +1,5 @@
 import { create } from 'zustand';
-import * as SecureStore from 'expo-secure-store';
-import { api } from '@/services/api';
+import { api, setTokens, clearTokens, getToken } from '@/services/api';
 
 export interface User {
   id: string;
@@ -30,13 +29,12 @@ export const useAuthStore = create<AuthState>((set) => ({
   signIn: async (email: string, password: string) => {
     set({ isLoading: true });
     try {
-      const response = await api.post<{ data: { token: string; usuario: User } }>('/api/auth/login', { email, senha: password });
-      const { token, usuario } = response.data;
-      try {
-        await SecureStore.setItemAsync('userToken', token);
-      } catch (storageError) {
-        console.error('Error persisting token', storageError);
-      }
+      const response = await api.post<{ data: { token: string; refreshToken: string; usuario: User } }>(
+        '/api/auth/login',
+        { email, senha: password }
+      );
+      const { token, refreshToken, usuario } = response.data;
+      await setTokens(token, refreshToken);
 
       set({ user: usuario, token, isLoading: false });
     } catch (error) {
@@ -48,13 +46,12 @@ export const useAuthStore = create<AuthState>((set) => ({
   signUp: async (email: string, password: string, nome: string) => {
     set({ isLoading: true });
     try {
-      const response = await api.post<{ data: { token: string; usuario: User } }>('/api/auth/registrar', { email, senha: password, nome });
-      const { token, usuario } = response.data;
-      try {
-        await SecureStore.setItemAsync('userToken', token);
-      } catch (storageError) {
-        console.error('Error persisting token', storageError);
-      }
+      const response = await api.post<{ data: { token: string; refreshToken: string; usuario: User } }>(
+        '/api/auth/registrar',
+        { email, senha: password, nome }
+      );
+      const { token, refreshToken, usuario } = response.data;
+      await setTokens(token, refreshToken);
 
       set({ user: usuario, token, isLoading: false });
     } catch (error) {
@@ -65,17 +62,13 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   signOut: async () => {
     set({ isLoading: true });
-    try {
-      await SecureStore.deleteItemAsync('userToken');
-    } catch (error) {
-      console.error('Error removing token', error);
-    }
+    await clearTokens();
     set({ user: null, token: null, isLoading: false, isOnboarded: false });
   },
 
   initialize: async () => {
     try {
-      const token = await SecureStore.getItemAsync('userToken');
+      const token = await getToken();
       if (token) {
         // Validate token by fetching profile
         const user = await api.get<User>('/api/perfil');
@@ -84,13 +77,9 @@ export const useAuthStore = create<AuthState>((set) => ({
         set({ isLoading: false });
       }
     } catch (error) {
-      // If token is invalid or expired
+      // If token (and refresh) is invalid or expired
       console.error('Session initialization error', error);
-      try {
-        await SecureStore.deleteItemAsync('userToken');
-      } catch (cleanupError) {
-        console.error('Error clearing token', cleanupError);
-      }
+      await clearTokens();
       set({ user: null, token: null, isLoading: false });
     }
   },

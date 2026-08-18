@@ -1,7 +1,6 @@
 const crypto = require('crypto');
-const bcrypt = require('bcryptjs');
 const { getDb } = require('../database/db');
-const cloudinary = require('../config/cloudinary');
+const { supabaseAdmin } = require('../config/supabase');
 
 const adminController = {
   async uploadCapa(req, res, next) {
@@ -10,13 +9,20 @@ const adminController = {
         return res.status(400).json({ error: 'Nenhum arquivo enviado.' });
       }
 
-      const dataUri = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
-      const result = await cloudinary.uploader.upload(dataUri, {
-        folder: 'viva-novela/capas',
-        resource_type: 'image',
-      });
+      const ext = req.file.mimetype.split('/')[1] || 'jpg';
+      const path = `capas/${crypto.randomUUID()}.${ext}`;
 
-      res.json({ data: { url: result.secure_url } });
+      const { error } = await supabaseAdmin.storage
+        .from('capas')
+        .upload(path, req.file.buffer, { contentType: req.file.mimetype });
+
+      if (error) {
+        return res.status(500).json({ error: 'Falha ao enviar a imagem.' });
+      }
+
+      const { data } = supabaseAdmin.storage.from('capas').getPublicUrl(path);
+
+      res.json({ data: { url: data.publicUrl } });
     } catch (error) {
       next(error);
     }
@@ -25,7 +31,12 @@ const adminController = {
   async listarUsuarios(req, res, next) {
     try {
       const db = await getDb();
-      const usuarios = await db.all('SELECT id, email, nome, plano, saldo_moedas, vip_expira_em, criado_em, papel FROM usuarios');
+      const usuarios = await db.all(`
+        SELECT u.id, u.email, u.nome, u.plano, u.saldo_moedas, u.vip_expira_em, u.criado_em, u.papel,
+          (SELECT a.status FROM assinaturas a WHERE a.usuario_id = u.id ORDER BY a.criado_em DESC LIMIT 1) AS assinatura_status
+        FROM usuarios u
+        ORDER BY u.criado_em DESC
+      `);
       res.json({ data: usuarios });
     } catch (error) {
       next(error);
@@ -91,13 +102,22 @@ const adminController = {
         return res.status(400).json({ error: 'Este e-mail já está em uso.' });
       }
 
-      const senhaHash = await bcrypt.hash(senha, 10);
-      const id = crypto.randomUUID();
+      const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+        email,
+        password: senha,
+        email_confirm: true,
+      });
+
+      if (authError) {
+        return res.status(400).json({ error: authError.message });
+      }
+
+      const id = authData.user.id;
 
       await db.run(
-        `INSERT INTO usuarios (id, email, nome, senha, papel, plano, saldo_moedas)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [id, email, nome, senhaHash, papel || 'leitor', 'gratuito', 0]
+        `INSERT INTO usuarios (id, email, nome, papel, plano, saldo_moedas)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [id, email, nome, papel || 'leitor', 'gratuito', 0]
       );
 
       res.status(201).json({ data: { id, message: 'Usuário criado com sucesso.' } });
@@ -117,6 +137,7 @@ const adminController = {
       }
 
       await db.run('DELETE FROM usuarios WHERE id = ?', [id]);
+      await supabaseAdmin.auth.admin.deleteUser(id).catch(() => {});
 
       res.json({ data: { message: 'Usuário deletado com sucesso.' } });
     } catch (error) {

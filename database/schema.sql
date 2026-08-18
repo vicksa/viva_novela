@@ -10,12 +10,12 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- TABELAS
 -- ============================================================
 
--- Tabela de usuários (autenticação própria via JWT/bcrypt, não usa auth.users do Supabase)
+-- Tabela de usuários (autenticação via Supabase Auth — id é o mesmo UUID de
+-- auth.users, criado pela API via supabase.auth.admin.createUser antes do INSERT)
 CREATE TABLE usuarios (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   nome VARCHAR(120) NOT NULL,
   email VARCHAR(255) UNIQUE NOT NULL,
-  senha TEXT NOT NULL,
   papel TEXT NOT NULL DEFAULT 'leitor',
   saldo_moedas INTEGER DEFAULT 0,
   plano VARCHAR(10) DEFAULT 'gratuito' CHECK (plano IN ('gratuito','vip')),
@@ -91,6 +91,20 @@ CREATE TABLE biblioteca (
   UNIQUE(usuario_id, historia_id)
 );
 
+-- Tabela de assinaturas (cobrança recorrente via Mercado Pago)
+CREATE TABLE assinaturas (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  usuario_id UUID REFERENCES usuarios(id) ON DELETE CASCADE,
+  mp_preapproval_id VARCHAR(255) UNIQUE NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending','authorized','paused','cancelled')),
+  frequencia VARCHAR(10) NOT NULL CHECK (frequencia IN ('mensal','anual')),
+  valor_reais DECIMAL(10,2) NOT NULL,
+  criado_em TIMESTAMP DEFAULT NOW(),
+  proximo_pagamento_em TIMESTAMP,
+  cancelado_em TIMESTAMP
+);
+
 -- ============================================================
 -- TRIGGER: Capítulos 1, 2, 3 sempre gratuitos
 -- ============================================================
@@ -149,20 +163,25 @@ CREATE INDEX idx_capitulos_historia_numero ON capitulos(historia_id, numero);
 CREATE INDEX idx_historias_status ON historias(status);
 CREATE INDEX idx_historias_genero ON historias(genero);
 CREATE INDEX idx_historias_destaque ON historias(destaque) WHERE destaque = TRUE;
+CREATE INDEX idx_assinaturas_usuario ON assinaturas(usuario_id);
 
 -- ============================================================
 -- CONTROLE DE ACESSO
 -- ============================================================
--- Este banco roda em Postgres puro (não Supabase), acessado apenas pela API
--- via connection string privilegiada, com autenticação própria (JWT + bcrypt,
--- coluna usuarios.papel). Todo o controle de acesso — inclusive o que cada
--- usuário pode ler/editar — é feito na camada da API, não via RLS do Postgres
--- (RLS do Supabase depende de auth.uid(), que não existe fora do Supabase).
+-- A autenticação (login/senha) é feita pelo Supabase Auth. A API continua
+-- sendo o único ponto de acesso ao banco (via connection string privilegiada,
+-- não pelas chaves anon/public), então todo o controle de acesso — inclusive
+-- o que cada usuário pode ler/editar — continua sendo feito na camada da API
+-- (coluna usuarios.papel), não via RLS. RLS não está habilitado nestas
+-- tabelas porque não há client falando direto com o Postgres do Supabase.
 
 -- ============================================================
--- UPLOADS (capas das histórias)
+-- STORAGE (capas das histórias)
 -- ============================================================
--- Os arquivos de capa são enviados pela API para o Cloudinary (ver
--- api/src/config/cloudinary.js e CLOUDINARY_URL), que retorna uma URL
--- pública permanente — não dependem de disco local nem de disco
--- persistente do Render.
+-- Os arquivos de capa são enviados pela API para o Supabase Storage, bucket
+-- "capas" (ver api/src/config/supabase.js), que retorna uma URL pública
+-- permanente — não dependem de disco local nem de disco persistente do Render.
+
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('capas', 'capas', true)
+ON CONFLICT (id) DO NOTHING;

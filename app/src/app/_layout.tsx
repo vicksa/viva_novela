@@ -76,6 +76,7 @@ export default function RootLayout() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="historia/[id]" options={{ headerShown: false, animation: 'slide_from_right' }} />
         <Stack.Screen name="leitor/[capituloId]" options={{ headerShown: false, animation: 'fade' }} />
+        <Stack.Screen name="assinatura" options={{ headerShown: false, animation: 'slide_from_bottom', presentation: 'modal' }} />
       </Stack>
     </QueryClientProvider>
   );

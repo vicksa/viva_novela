@@ -114,6 +114,8 @@ export const Usuarios: React.FC = () => {
               <th>Email</th>
               <th>Papel</th>
               <th>Plano</th>
+              <th>VIP até</th>
+              <th>Assinatura</th>
               <th>Saldo</th>
               <th>Ações</th>
             </tr>
@@ -137,6 +139,8 @@ export const Usuarios: React.FC = () => {
                   </span>
                 </td>
                 <td>{u.plano}</td>
+                <td>{u.vip_expira_em ? new Date(u.vip_expira_em).toLocaleDateString('pt-BR') : '—'}</td>
+                <td>{u.assinatura_status ?? '—'}</td>
                 <td>{u.saldo_moedas}</td>
                 <td>
                   <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -160,7 +164,7 @@ export const Usuarios: React.FC = () => {
             ))}
             {usuarios.length === 0 && (
               <tr>
-                <td colSpan={7} style={{ textAlign: 'center', padding: '2rem' }}>Nenhum usuário encontrado.</td>
+                <td colSpan={9} style={{ textAlign: 'center', padding: '2rem' }}>Nenhum usuário encontrado.</td>
               </tr>
             )}
           </tbody>
