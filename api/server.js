@@ -9,6 +9,6 @@ getDb()
     app.listen(port, () => console.log(`🚀 Viva Novela API rodando na porta ${port}`));
   })
   .catch(err => {
-    console.error('Falha ao conectar no banco de dados SQLite:', err);
+    console.error('Falha ao conectar no banco de dados Postgres:', err);
     process.exit(1);
   });

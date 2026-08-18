@@ -92,9 +92,31 @@ const pagamentosController = {
       }
 
       const preapprovalId = req.query['data.id'];
+      const db = await getDb();
+
+      // Idempotência: o MP reenvia a notificação se não responder 200 a tempo.
+      // req.body.id é o id da notificação em si (diferente de data.id, que é o
+      // id do recurso/assinatura e se repete entre notificações distintas do
+      // mesmo preapproval). "Reivindica" o evento com um INSERT que falha
+      // silenciosamente (ON CONFLICT DO NOTHING) se já foi visto — só quem
+      // conseguir inserir a linha processa o evento.
+      const eventId = req.body?.id ? String(req.body.id) : `${preapprovalId}:${req.query.action || req.query.type || ''}`;
+      const eventType = req.body?.type || req.query.type || null;
+      const evento = await db.get(
+        `INSERT INTO webhook_events (provider, event_id, event_type, payload)
+         VALUES ('mercadopago', ?, ?, ?)
+         ON CONFLICT (provider, event_id) DO NOTHING
+         RETURNING id`,
+        [eventId, eventType, JSON.stringify(req.body || {})]
+      );
+
+      if (!evento) {
+        // Já processado antes — confirma recebimento sem reprocessar.
+        return res.sendStatus(200);
+      }
+
       const preapproval = await preApprovalClient.get({ id: preapprovalId });
 
-      const db = await getDb();
       const assinatura = await db.get('SELECT * FROM assinaturas WHERE mp_preapproval_id = ?', [preapprovalId]);
       if (!assinatura) return res.sendStatus(200);
 

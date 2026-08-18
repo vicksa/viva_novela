@@ -1,32 +1,28 @@
-# React + TypeScript + Vite
+# Viva Novela — Painel Admin
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Painel administrativo (React + Vite) para gerenciar histórias, capítulos e usuários do Viva Novela.
 
-Currently, two official plugins are available:
+## Funcionalidades
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- Login (Supabase Auth, restrito a usuários com `papel = 'admin'`)
+- CRUD de histórias, com upload de capa (Supabase Storage)
+- CRUD de capítulos por história, com controle de grátis/pago (`is_gratuito`, `custo_moedas`)
+- Gestão de usuários (criar, editar saldo/plano/papel, excluir)
 
-## React Compiler
+## Desenvolvimento
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+npm install
+cp .env.example .env   # ajuste VITE_API_URL se a API não estiver em localhost:3000
+npm run dev
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+A API (`../api`) precisa estar rodando e configurada com as credenciais do Supabase — veja `api/.env.example`.
+
+## Build
+
+```bash
+npm run build
+```
+
+Gera os arquivos estáticos em `dist/`, publicados hoje como um Static Site no Render (ver `render.yaml` na raiz do monorepo).

@@ -14,14 +14,6 @@ const errorHandler = (err, req, res, _next) => {
     return res.status(400).json({ error: mensagens[err.code] || 'Erro no upload do arquivo.' });
   }
 
-  // Erros do Supabase
-  if (err.code && err.message && err.details) {
-    return res.status(500).json({
-      error: 'Erro no banco de dados.',
-      ...(process.env.NODE_ENV !== 'production' && { detalhes: err.message }),
-    });
-  }
-
   // Erro de JSON malformado (Express body-parser)
   if (err.type === 'entity.parse.failed') {
     return res.status(400).json({ error: 'JSON malformado no corpo da requisição.' });

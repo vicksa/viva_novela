@@ -105,6 +105,21 @@ CREATE TABLE assinaturas (
   cancelado_em TIMESTAMP
 );
 
+-- Registro de eventos de webhook já processados, para idempotência: o
+-- Mercado Pago (e a maioria dos provedores) pode reenviar a mesma notificação
+-- várias vezes se não recebemos 200 a tempo. UNIQUE(provider, event_id)
+-- garante que um evento só é processado uma vez, mesmo com reenvios.
+CREATE TABLE webhook_events (
+  id BIGSERIAL PRIMARY KEY,
+  provider VARCHAR(50) NOT NULL,
+  event_id VARCHAR(255) NOT NULL,
+  event_type VARCHAR(100),
+  payload JSONB,
+  processed_at TIMESTAMP,
+  criado_em TIMESTAMP DEFAULT NOW(),
+  UNIQUE(provider, event_id)
+);
+
 -- ============================================================
 -- TRIGGER: Capítulos 1, 2, 3 sempre gratuitos
 -- ============================================================

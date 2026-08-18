@@ -81,7 +81,7 @@ function gerarConteudoCapitulo(titulo, numero) {
 }
 
 async function seed() {
-  console.log('🌱 Iniciando o processo de seeding do banco de dados SQLite...');
+  console.log('🌱 Iniciando o processo de seeding do banco de dados...');
 
   try {
     const db = await getDb();

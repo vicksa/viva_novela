@@ -8,10 +8,13 @@ Plataforma mobile de histórias de romance serializadas em capítulos curtos, co
 
 | Componente | Tecnologia |
 |-----------|-----------|
-| App Mobile | React Native (Expo SDK 56) |
+| App Mobile | React Native (Expo SDK 54) |
 | Backend API | Node.js + Express |
+| Autenticação | Supabase Auth |
 | Banco de Dados | Supabase (PostgreSQL) |
-| Painel Admin | React + Vite (Entrega 3) |
+| Storage | Supabase Storage (capas) |
+| Pagamentos | Mercado Pago (assinatura VIP recorrente) |
+| Painel Admin | React + Vite |
 
 ## Estrutura
 
@@ -19,7 +22,7 @@ Plataforma mobile de histórias de romance serializadas em capítulos curtos, co
 viva-novela/
 ├── app/          ← App React Native (Expo)
 ├── api/          ← Backend Node.js + Express
-├── admin/        ← Painel Admin (Entrega 3)
+├── admin/        ← Painel Admin
 └── database/     ← Schema SQL para Supabase
 ```
 

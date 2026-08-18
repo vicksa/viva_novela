@@ -14,7 +14,7 @@ function fileFilter(req, file, cb) {
 }
 
 // Arquivo fica em memória (req.file.buffer); o controller sobe o buffer
-// direto para o Cloudinary, sem gravar nada em disco local.
+// direto para o Supabase Storage, sem gravar nada em disco local.
 const upload = multer({
   storage: multer.memoryStorage(),
   fileFilter,
